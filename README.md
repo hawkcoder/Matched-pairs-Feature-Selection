@@ -6,8 +6,8 @@ This code is for this paper:
 
  In this paper, We compare the performance of 10 feature-selection methods (eight MPFS methods and two traditional unpaired methods) on two real datasets by applied three classification methods, and analyze the algorithm complexity of these methods through the running of their programs. 
 
-![tabel1](_pic/tabel1.png)
-![picture1](_pic/figure1.png)
+![tabel1](./_pic/tabel1.png)
+![picture1](./_pic/figure1.png)
 
 ## Try use this code
 
