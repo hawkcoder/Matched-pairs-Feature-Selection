@@ -1,7 +1,10 @@
 # A Review of Matched-pairs Feature Selection Methods for Gene Expression Data Analysis
 
 
-In this review, we compare the performance of 10 feature-selection methods (eight MPFS methods and two traditional unpaired methods) on two real datasets by applied three classification methods, and analyze the algorithm complexity of these methods through the running of their programs. 
+This code is for this paper:
+- Sen Liang, Anjun Ma, Sen Yang, Yan Wang, Qin Ma, "A Review of Matched-pairs Feature Selection Methods for Gene Expression Data Analysis”, Computational and Structural Biotechnology Journal, 2018, 16:88-97. https://doi.org/10.1016/j.csbj.2018.02.005.
+
+ In this paper, We compare the performance of 10 feature-selection methods (eight MPFS methods and two traditional unpaired methods) on two real datasets by applied three classification methods, and analyze the algorithm complexity of these methods through the running of their programs. 
 
 ![tabel1](_pic/tabel1.png)
 ![picture1](_pic/figure1.png)
