@@ -1,0 +1,284 @@
+---
+title: "Paired Feature Selection Paper数据预处理流程"
+output: html_notebook
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(include = T, warning = F)
+
+```
+
+```{r}
+# ****************************************************
+# Email: lsen@infervision.com
+# Data: Fri Dec  1 11:01:17 2017
+# Description: null
+#                
+# *****************************************************
+
+library(TCGAbiolinks)
+library(SummarizedExperiment)
+library(stringr)
+```
+
+
+## （1）下载基因表达数据
+- 使用TCGAbiolinks包
+- 直接下载TCGA-BRCA的"Primary solid Tumor","Solid Tissue Normal"这两类乳腺癌的基因表达数据
+- 下载的是TCGA改版之前的数据，而非改版之后的数据（legacy=TRUE）
+
+
+```{r, include=TRUE}
+# 下载基因表达数据，并保存到brca.exp中
+query.exp <- GDCquery(project = "TCGA-BRCA", 
+                      legacy = TRUE,
+                      data.category = "Gene expression",
+                      data.type = "Gene expression quantification",
+                      platform = "Illumina HiSeq", 
+                      file.type = "results",
+                      experimental.strategy = "RNA-Seq",
+                      sample.type = c("Primary solid Tumor","Solid Tissue Normal"))
+GDCdownload(query.exp)
+brca.exp <- GDCprepare(query = query.exp, save = TRUE, save.filename = "./_rdata/brcaExp.rda")
+
+# load("./_data/brcaExp.rda")
+# brca.exp = assay(data)
+```
+
+```{r}
+# 下载case和ctrol样本的ID
+# Which samples are primary soild tumor / solid tissue normal
+dataSmTP <- TCGAquery_SampleTypes(getResults(query.exp, cols="cases"),"TP")
+dataSmNT <- TCGAquery_SampleTypes(getResults(query.exp, cols="cases"),"NT")
+
+dataSmNT2 = str_sub(dataSmNT, 1, 12)
+dataSmTP2 = str_sub(dataSmTP, 1, 12)
+dataSmTP = dataSmTP[match(dataSmNT2, dataSmTP2)]
+
+data_NT = as.data.frame(brca.exp[,dataSmNT])
+data_TP = as.data.frame(brca.exp[,dataSmTP])
+
+colnames(data_NT) = str_sub(colnames(data_NT), 1, 12)
+colnames(data_TP) = str_sub(colnames(data_TP), 1, 12)
+
+# save
+data_case = data_TP
+data_ctrl = data_NT
+
+save(data_case, data_ctrl, file = "./_data/TCGA_BRCA_case_control.rdata")
+# load("./_data/TCGA_BRCA_case_control.rdata")
+```
+
+```{r, include=T}
+# 总共数据的维度
+dim(data_case)
+dim(data_ctrl)
+```
+
+```{r, include=T}
+# case数据
+data_case[1:5, 1:5]
+```
+
+```{r, include=T}
+# ctrl数据
+data_ctrl[1:5, 1:5]
+```
+
+## （2）数据预处理
+### a) 检查是否有Nan，Empty数据
+```{r, include=T}
+sum(is.na(brca.exp)) 
+sum(is.na(brca.exp))
+```
+**没有缺失数据**
+
+### b) 检查是否有重复数据
+- 检查样本ID是否有重复
+- 检查gene是否有重复
+```{r, include=T}
+# 检查样本ID是否有重复
+length(unique(colnames(data_case))) == ncol(data_case)
+length(unique(colnames(data_ctrl))) == ncol(data_ctrl)
+
+# 检查gene是否有重复
+length(unique(rownames(data_case))) == nrow(data_case)
+length(unique(rownames(data_ctrl))) == nrow(data_ctrl)
+
+length(unique(rownames(data_case)))
+length(unique(rownames(data_ctrl)))
+```
+**样本ID没有重复的，但gene ID是有重复的**
+
+去掉重复的gene ID，采取的策略是：保留第一次出现的gene ID 对应的值，其他重复值一概删除
+```{r, include=T}
+# 去掉重复的gene ID
+v_delete = which(duplicated(rownames(data_case)))
+
+data_case3 = data_case[-v_delete, ]
+data_ctrl3 = data_ctrl[-v_delete, ]
+
+```
+
+
+### c) 基因选择
+- 1. 取log
+- 2. 删掉mean值都小于1的
+- 3. 选择FC > 0.5的
+- 4. 选择TTest p-value < 0.005
+```{r}
+# Step 1: 取log
+data_case2 = round(log10(as.matrix(data_case3) + 1), 2)
+data_ctrl2 = round(log10(as.matrix(data_ctrl3) + 1), 2)
+
+# Step 2: 删掉mean值都小于1的feature
+mean_case = rowMeans(data_case2)
+mean_ctrl = rowMeans(data_ctrl2)
+
+i_mean_case = which(mean_case < 1) 
+i_mean_ctrl = which(mean_ctrl < 1) 
+
+i_mean_both = intersect(i_mean_case, i_mean_ctrl)
+data_case2 = data_case2[-i_mean_both, ]
+data_ctrl2 = data_ctrl2[-i_mean_both, ]
+
+# Step 3: 选择一些FC > 0.5的
+mean_case = rowMeans(data_case2)
+mean_ctrl = rowMeans(data_ctrl2)
+mean_FC = mean_case - mean_ctrl
+#hist(mean_FC)
+i_mean_FC = which(abs(mean_FC) > 0.5) 
+
+data_case2 = data_case2[i_mean_FC, ]
+data_ctrl2 = data_ctrl2[i_mean_FC, ]
+
+# Step 4: 做T-test检验
+v_pvalue = vector(mode = 'numeric', length = nrow(data_case2))
+for (i in 1:nrow(data_case2)) {
+  v_pvalue[i] = t.test(data_case2[i,],  data_ctrl2[i,])$p.value
+}
+
+#hist(-log10(v_pvalue), breaks = 100)
+
+# 去掉p-value > 0.005的
+#sum(v_pvalue < 0.005)
+
+data_case2 = data_case2[which(v_pvalue < 0.005), ]
+data_ctrl2 = data_ctrl2[which(v_pvalue < 0.005), ]
+```
+
+
+### d) 最后检查一下数据
+```{r, include=T}
+data_case2 = as.data.frame(data_case2)
+data_ctrl2 = as.data.frame(data_ctrl2)
+
+# (1) 数据维度是否一致
+dim(data_case2)
+dim(data_ctrl2)
+
+# (2) sample ID 是否重复
+length(unique(colnames(data_case2))) == ncol(data_case2)
+length(unique(colnames(data_ctrl2))) == ncol(data_ctrl2)
+
+# (3) case/contrl的sample ID是否一致
+sum(colnames(data_case2) == colnames(data_ctrl2)) == ncol(data_case2)
+
+# (4) gene ID 是否重复
+length(unique(rownames(data_case2))) == nrow(data_case2)
+length(unique(rownames(data_ctrl2))) == nrow(data_ctrl2)
+
+# (5) case/contrl的gene ID是否一致
+sum(rownames(data_case2) == rownames(data_ctrl2)) == nrow(data_case2)
+
+```
+综上，sample ID 和 gene ID 没有重复，case/control的这两者也一致。
+
+### e) 保存数据
+```{r, include=T}
+# （1）保存Filter后的数据
+save(data_case2, data_ctrl2, file = "./_data/TCGA_BRCA_case_control_filter.rdata")
+# save to csv data
+write.csv(data_case2, file = "./_data/TCGA_BRCA_case_filter.csv")
+write.csv(data_ctrl2, file = "./_data/TCGA_BRCA_ctrl_filter.csv")
+
+
+# （2）将sample ID改成case_/ctrl_开头的标志符，方便阅读
+data_case3 = data_case2
+data_ctrl3 = data_ctrl2
+
+colnames(data_case3) = paste0("case_", c(1:ncol(data_case2)))
+colnames(data_ctrl3) = paste0("ctrl_", c(1:ncol(data_ctrl2)))
+
+save(data_case3, data_ctrl3, file = "./_data/TCGA_BRCA_case_control_filter3.rdata")
+write.csv(data_case3, file = "./_data/TCGA_BRCA_case_filter3.csv")
+write.csv(data_ctrl3, file = "./_data/TCGA_BRCA_ctrl_filter3.csv")
+
+```
+
+最后的基因数据展示
+```{r, include=T}
+# load("./_data/TCGA_BRCA_case_control_filter3.rdata")
+data_case3[1:10, 1:8]
+data_ctrl3[1:10, 1:8]
+```
+
+
+
+## （3）下载临床数据
+```{r}
+# get clinical data
+dataClin = GDCquery_clinic(project = "TCGA-BRCA", "clinical")
+
+# 目前我们分析的sample ID 为
+v_sample_ID = colnames(data_case)
+
+# 检查下我们分析的sample ID 是否都有临床信息
+sum(v_sample_ID %in% dataClin$bcr_patient_barcode) == length(v_sample_ID)
+
+# 提前出我们关心的sample的临床信息
+dataClin2 = dataClin[match(v_sample_ID ,dataClin$bcr_patient_barcode),]
+
+```
+
+a) 探究下Stage数据
+- 可以将stageI II合并变成Low Stage，然后把stage III，IV合并变成High Stage，然后用SVM去预测Low Stage 和 High Stage的状态
+```{r, include=T}
+data_clin = dataClin2[, c("bcr_patient_barcode", "gender", "tumor_stage", "vital_status", "days_to_death","days_to_last_follow_up")]
+
+table(dataClin2$tumor_stage)
+```
+
+```{r, include=T}
+data_clin$tumor_stage = str_trim(data_clin$tumor_stage )
+data_clin$tumor_stage[data_clin$tumor_stage %in% c("stage i", "stage ia", "stage ib", "stage ic")] = "stage I"
+data_clin$tumor_stage[data_clin$tumor_stage %in% c("stage ii", "stage iia", "stage iib", "stage iic")] = "stage II"
+data_clin$tumor_stage[data_clin$tumor_stage %in% c("stage iii", "stage iiia", "stage iiib", "stage iiic")] = "stage III"
+data_clin$tumor_stage[data_clin$tumor_stage %in% c("stage iv", "stage iva", "stage ivb", "stage ivc")] = "stage IV"
+data_clin$tumor_stage[data_clin$tumor_stage %in% c("not reported")] = "NULL"
+
+table(data_clin$tumor_stage)
+```
+
+
+b) 探究下是否死亡数据
+- 可以用这个数据作为预测Target，然后用SVM去预测病人是否死亡
+```{r, include=T}
+data_clin$vital_status = str_trim(data_clin$vital_status)
+table(data_clin$vital_status)
+
+```
+
+
+```{r, include=T}
+# 保存数据
+save(dataClin, file = "./_data/dataClin.rdata")
+save(dataClin2, file = "./_data/dataClin2.rdata")
+save(data_clin, file = "./_data/data_clin.rdata")
+
+write.csv(dataClin2, file = "./_data/dataClin2.csv")
+write.csv(data_clin, file = "./_data/data_clin.csv")
+
+```
+

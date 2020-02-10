@@ -1,0 +1,37 @@
+ 		
+Pair number	Timing of Relapse	   
+Pair 1	Early	   
+Pair 2~	Early	   
+Pair 3	Early	   
+Pair 4	Early	   
+Pair 5	Late	   
+Pair 6	Late	   
+Pair 7~	Late	   
+Pair 8	Early	   
+Pair 9*^	Late	   
+Pair 10	Early	   
+Pair 11	Late	   
+Pair 12~	Late	   
+Pair 13	Early	   
+Pair 14	Early	   
+Pair 15	Late	   
+Pair 16*	Late	   
+Pair 17~	Early	   
+Pair 18	Early	   
+Pair 19	Early	   
+Pair 20	Early	   
+Pair 21	Early	   
+Pair 22	Early	   
+Pair 23	Early	   
+Pair 24	Early	   
+Pair 25	Early	   
+Pair 26	Early	   
+Pair 27	Early	   
+Pair 28	Late	   
+Pair 29~	Late	   
+Pair 30	Late	   
+Pair 31	Late	   
+Pair 32	Early	   
+Pair 33	Early	   
+Pair 34	Early	   
+Pair 35	Early	 

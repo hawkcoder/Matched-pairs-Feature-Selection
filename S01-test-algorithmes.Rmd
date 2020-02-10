@@ -1,0 +1,168 @@
+---
+title: "Paired Feature Selection Paper比较实验流程"
+output: html_notebook
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(include = T, warning = F)
+
+```
+
+
+## Step 1：输入数据
+
+- 输入的数据为2个m×n的矩阵，一个Case矩阵(Tumor)，一个Contrl矩阵(Normal)，行为feature(m个)，列为samples(n个)
+    - data_case，这是Case矩阵, Tumor的基因表达矩阵
+    - data_ctrl, 这是Contrl矩阵，Normal的基因表达矩阵
+    - 目前数据采用的TCGA-BRCA的基因表达数据，行为feature（也就是2012个基因），列为样本数（也就是病例113个）
+    
+
+```{r, include=T}
+# load data 
+rm(list = ls())
+load("./_data/TCGA_BRCA_case_control_filter.rdata")
+load("./_data/data_clin.rdata")
+
+
+data_case = data_case2
+data_ctrl = data_ctrl2
+
+rm(data_case2, data_ctrl2)
+
+# save data
+write.csv(data_case, file = "./_data/input_data_case.csv")
+write.csv(data_ctrl, file = "./_data/input_data_ctrl.csv")
+write.csv(data_clin, file = "./_data/clinical_data.csv")
+
+```
+
+```{r}
+# data_case 的维度
+dim(data_case)
+
+# data_ctrl 的维度
+dim(data_ctrl)
+
+head(data_case)
+head(data_ctrl)
+```
+
+### 查看病人临床信息
+```{r, include=T}
+head(data_clin)
+
+```
+
+## Step 2： 测试算法
+- 输出是一个m×2的矩阵
+    - 第一列是features的名字
+    - 第二列是对应的p-value值
+    
+### （1）ttest系列：Paired t-test
+```{r, include=TRUE}
+source("./S1-ttest.R")
+result_pttest = test_pttest(data_case, data_ctrl)
+
+#排序
+result_pttest = result_pttest[order(result_pttest$pvalue),]
+
+# save
+write.csv(result_pttest, file = "./_data/result_pttest.csv", row.names = F)
+
+result_pttest[1:10,]
+```
+
+### （2）ttest系列：Modified Paired t-test （Tan et al.）
+```{r, include=TRUE}
+source("./S1-ttest.R")
+result_mpttest = test_mpttest(data_case, data_ctrl)
+
+#排序
+result_mpttest = result_mpttest[order(result_mpttest$pvalue),]
+
+# save
+write.csv(result_mpttest, file = "./_data/result_mpttest.csv", row.names = F)
+
+# 显示Top10的feature
+result_mpttest[1:10,]
+```
+
+### （3）ttest系列：Fold-Change Paired t-test (Cao et al.)
+```{r, include=T}
+source("./S1-ttest.R")
+result_fcpttest = test_fcpttest(data_case, data_ctrl)
+
+#排序
+result_fcpttest = result_fcpttest[order(result_fcpttest$pvalue),]
+# save
+write.csv(result_fcpttest, file = "./_data/result_fcpttest.csv", row.names = F)
+
+# 显示Top10的feature
+result_fcpttest[1:10,]
+```
+
+### （4）CLR系列：RPCLR, Random penalized conditional logistic regression
+```{r, include=T}
+source("./S3-CLR.R")
+#load("./_data/result_rpclr.rdata")
+
+mtry = 3
+numBS = 4000 #ncol(data_case) * 2
+
+result_rpclr = clr_rpclr(data_case, data_ctrl, mtry, numBS)
+
+# save to csv
+write.csv(result_rpclr, file = "./_data/result_rpclr.csv", row.names = F)
+
+result_rpclr = read.csv("./_data/result_rpclr.csv")
+
+sum(unique(result_rpclr$features) %in% unique(rownames(data_ctrl)))
+```
+
+```{r, include=T}
+# feature的Importance越大排名越高
+# 显示Top10的feature
+result_rpclr[1:10,]
+
+```
+
+### （5）CLR系列： （待续）
+
+
+### （6）CLR系列：Baysian CLR
+- Bayesian 用的是Python的 PyMC3包实现的
+- 这个算法也是巨慢无比，5000个采样，跑了19个小时
+
+```{r, include=T}
+# 导入实现的结果
+result_bayesianCLR = read.csv(file = "./_data/bayesian_r_features.csv", header = F)
+result_bayesianCLR = data.frame(features = rownames(data_ctrl), importance = result_bayesianCLR$V1)
+
+# 排序
+result_bayesianCLR = result_bayesianCLR[order(-result_bayesianCLR$importance),]
+# save
+write.csv(result_bayesianCLR, file = "./_data/result_bayesianCLR.csv", row.names = F)
+
+# feature的Importance越大排名越高
+# 显示Top10的feature
+result_bayesianCLR[1:10,]
+
+```
+
+### （7）Boosting系列： boosting-PQL
+速度奇慢无比，一个迭代只能选择一个feature，跑了3天，只跑了480个迭代。
+原文作者都生成这个巨慢无比，
+
+
+### （8）Boosting系列： boosting-WL2
+这个算法还算正常
+```{r, include=T}
+load("./_data/result_boost_wl2.rdata")
+
+result_boost_wl2[1:10,]
+
+```
+
+
+
